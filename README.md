@@ -82,7 +82,18 @@ Every push runs the unit tests and trains both models on synthetic data as a pip
 
 ## Results
 
-Run `make train` on the real dataset to produce `reports/model_card.md` and `reports/metrics.json`, which include validation and test metrics for both models.
+Trained on the full real dataset with a chronological split: 199,364 transactions for training, then validation (56 fraud) and test (52 fraud) on the later transactions. The threshold for each model was tuned on validation and applied unchanged to test. Full details are in [`reports/model_card.md`](reports/model_card.md).
+
+| Model | Test PR AUC | Test ROC AUC | Precision | Recall | Fraud caught | False alerts |
+|---|---|---|---|---|---|---|
+| PyTorch MLP (champion) | 0.772 | 0.987 | 1.000 | 0.654 | 34 / 52 | 0 |
+| XGBoost baseline | 0.756 | 0.980 | 0.867 | 0.750 | 39 / 52 | 6 |
+
+The test set holds only 52 frauds, so one run could be luck. Across seeds 42, 1 and 2, the MLP's test PR AUC stayed between 0.772 and 0.777 and XGBoost's between 0.756 and 0.765, so the MLP won every time.
+
+The two models fail differently, which matters more than the small PR AUC gap. At its F1 threshold the MLP raised no false alerts but missed more fraud. XGBoost caught 5 more frauds at the cost of 6 false alerts across 42,722 transactions. Which one is better depends on what a missed fraud costs against an analyst's time, and that is what `--min-precision` is for.
+
+Both models score lower on test than on validation (PR AUC 0.87 to 0.77). The drift report explains part of that: run against the test window, it flags strong shifts in time of day features, because the last 15% of the data falls in the evening of day two. It also flags shifts in components such as V1, V3 and V12. Two days of data cannot cover a full daily cycle, and the monitoring catches exactly that.
 
 ## Project layout
 
