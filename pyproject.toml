@@ -1,0 +1,12 @@
+[project]
+name = "fraud-mlops"
+version = "0.1.0"
+description = "Card fraud detection with PyTorch, XGBoost and MLflow"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["fraud"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
