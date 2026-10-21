@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-train-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Unit tests
+        run: pytest -q
+
+      - name: Train on synthetic data (pipeline smoke test)
+        run: python -m fraud.train --synthetic --epochs 10
+
+      - name: Drift check runs
+        run: python -m fraud.drift --demo-shift
+
+      - name: Build serving image
+        run: docker build -t fraud-api .
+
+      - name: Smoke test the container
+        run: |
+          docker run -d -p 8000:8000 --name api fraud-api
+          for i in $(seq 1 30); do curl -sf localhost:8000/health && break; sleep 2; done
+          python - <<'PY'
+          import json, urllib.request
+          import pandas as pd
+          from fraud.data import make_synthetic, FEATURE_COLS
+          row = make_synthetic(10)[FEATURE_COLS].iloc[0].to_dict()
+          req = urllib.request.Request("http://localhost:8000/predict", json.dumps(row).encode(), {"Content-Type": "application/json"})
+          out = json.load(urllib.request.urlopen(req))
+          assert 0 <= out["fraud_probability"] <= 1, out
+          print(out)
+          PY
+          docker logs api
